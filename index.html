@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlockWarden - AI Blockchain Detective</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&family=VT323&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        :root {
+            --primary: #00ffa3;
+            --secondary: #000000;
+            --bg: #f4f1eb;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(var(--primary) 1px, transparent 1px),
+                radial-gradient(var(--primary) 1px, transparent 1px);
+            background-size: 50px 50px;
+            background-position: 0 0, 25px 25px;
+            background-attachment: fixed;
+        }
+
+        .neo-title {
+            font-family: 'VT323', monospace;
+            text-shadow: 2px 2px 0 var(--secondary);
+        }
+
+        .neo-brutalism {
+            background: white;
+            border: 3px solid var(--secondary);
+            box-shadow: 5px 5px 0 var(--secondary);
+            transition: all 0.2s ease;
+        }
+
+        .neo-brutalism:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 7px 7px 0 var(--secondary);
+        }
+
+        .neo-brutalism.active {
+            background: var(--primary);
+            transform: translate(2px, 2px);
+            box-shadow: 3px 3px 0 var(--secondary);
+        }
+
+        .neo-input {
+            background: white;
+            border: 3px solid var(--secondary);
+            box-shadow: 3px 3px 0 var(--secondary);
+        }
+
+        .neo-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .chat-container {
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary) var(--bg);
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background: var(--bg);
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: var(--primary);
+            border-radius: 3px;
+        }
+
+        .cyber-badge {
+            background: var(--primary);
+            border: 2px solid var(--secondary);
+            font-family: 'VT323', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .loading-dots::after {
+            content: '';
+            animation: dots 1s infinite steps(4);
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        .message-user {
+            border-right: 3px solid var(--secondary);
+            background: var(--primary);
+            opacity: 0.9;
+        }
+
+        .message-assistant {
+            border-left: 3px solid var(--secondary);
+            background: white;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4" x-data="blockWarden">
+    <main class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="neo-title text-6xl md:text-8xl font-bold mb-4">
+                Block<span class="text-[#00ffa3]">Warden</span>
+            </h1>
+            <div class="inline-block cyber-badge px-4 py-2 text-lg">
+                Blockchain Intelligence Unit
+            </div>
+        </header>
+
+        <div class="mb-8 flex flex-wrap gap-4">
+            <div class="flex-1 overflow-x-auto whitespace-nowrap hide-scrollbar">
+                <div class="flex gap-3">
+                    <template x-for="(chat, index) in chats" :key="index">
+                        <button 
+                            @click="switchChat(index)"
+                            class="neo-brutalism px-6 py-3 rounded-lg flex items-center gap-3 min-w-[200px] whitespace-normal"
+                            :class="{'active': currentChatIndex === index}">
+                            <i class="bi bi-shield-lock"></i>
+                            <span x-text="chat.name" class="flex-1 text-left"></span>
+                            <i class="bi bi-x-lg hover:text-red-500 cursor-pointer" 
+                               @click.stop="removeChat(index)"></i>
+                        </button>
+                    </template>
+                </div>
+            </div>
+            <button @click="createNewChat()" 
+                    class="neo-brutalism px-6 py-3 rounded-lg flex items-center gap-2 bg-[#00ffa3]">
+                <i class="bi bi-plus-lg"></i>
+                <span>New Investigation</span>
+            </button>
+        </div>
+
+        <template x-if="currentChat">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Chat Interface -->
+                <div class="neo-brutalism p-6 rounded-lg">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-3">
+                            <i class="bi bi-shield-lock text-2xl"></i>
+                            <h2 class="text-xl font-bold" x-text="currentChat.name"></h2>
+                        </div>
+                        <button @click="editChatName()" 
+                                class="neo-brutalism p-2 rounded-lg">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="h-[400px] overflow-y-auto chat-container mb-6 space-y-4 p-4" 
+                         x-ref="chatContainer">
+                        <template x-for="message in currentChat.messages" :key="message.id">
+                            <div class="neo-brutalism p-4 rounded-lg"
+                                 :class="message.role === 'user' ? 'message-user ml-12' : 'message-assistant mr-12'">
+                                <p x-text="message.content" class="whitespace-pre-line"></p>
+                            </div>
+                        </template>
+                        <div x-show="isLoading" 
+                             class="text-center loading-dots font-mono">
+                            Processing Investigation
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <input type="text" x-model="userInput" 
+                               @keyup.enter="sendMessage"
+                               placeholder="Enter wallet address or investigation query..." 
+                               class="neo-input flex-1 rounded-lg px-4 py-3">
+                        <button @click="sendMessage" 
+                                class="neo-brutalism px-6 py-3 rounded-lg">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Analytics Panel -->
+                <div class="neo-brutalism p-6 rounded-lg">
+                    <div class="flex items-center gap-3 mb-6">
+                        <i class="bi bi-graph-up text-2xl"></i>
+                        <h2 class="text-xl font-bold">Blockchain Analytics</h2>
+                    </div>
+
+                    <div class="space-y-6">
+                        <template x-if="currentChat.walletData.balance !== null">
+                            <div class="neo-brutalism p-4 rounded-lg">
+                                <h3 class="text-lg font-bold mb-2">Wallet Balance</h3>
+                                <div class="text-3xl text-[#00ffa3]" 
+                                     x-text="`${currentChat.walletData.balance} ETH`"></div>
+                            </div>
+                        </template>
+
+                        <template x-if="currentChat.walletData.transactions.length > 0">
+                            <div class="neo-brutalism p-4 rounded-lg">
+                                <h3 class="text-lg font-bold mb-4">Recent Transactions</h3>
+                                <div class="space-y-3">
+                                    <template x-for="tx in currentChat.walletData.transactions" :key="tx.hash">
+                                        <div class="neo-brutalism p-3 rounded-lg hover:bg-[#00ffa3]/10">
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <div class="font-bold">Hash:</div>
+                                                <div x-text="tx.hash.substring(0, 16) + '...'"></div>
+                                                <div class="font-bold">Value:</div>
+                                                <div x-text="tx.value + ' ETH'"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </main>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('blockWarden', () => ({
+                chats: [],
+                currentChatIndex: 0,
+                userInput: '',
+                isLoading: false,
+                messageId: 0,
+
+                init() {
+                    this.createNewChat();
+                },
+
+                get currentChat() {
+                    return this.chats[this.currentChatIndex];
+                },
+
+                createNewChat() {
+                    const chatNumber = this.chats.length + 1;
+                    this.chats.push({
+                        name: `Investigation #${chatNumber}`,
+                        messages: [],
+                        walletData: {
+                            balance: null,
+                            transactions: []
+                        }
+                    });
+                    this.currentChatIndex = this.chats.length - 1;
+                    this.addMessage('assistant', 'BlockWarden AI initialized. I am your blockchain forensics assistant.\n\nYou can:\n1. Enter an Ethereum wallet address for analysis\n2. Ask questions about blockchain transactions\n3. Request specific blockchain data\n\nHow can I assist with your investigation today?');
+                },
+
+                switchChat(index) {
+                    this.currentChatIndex = index;
+                },
+
+                removeChat(index) {
+                    if (this.chats.length > 1) {
+                        this.chats = this.chats.filter((_, i) => i !== index);
+                        if (this.currentChatIndex >= this.chats.length) {
+                            this.currentChatIndex = this.chats.length - 1;
+                        }
+                    }
+                },
+
+                editChatName() {
+                    const newName = prompt('Enter new investigation name:', this.currentChat.name);
+                    if (newName) {
+                        this.currentChat.name = newName;
+                    }
+                },
+
+                addMessage(role, content) {
+                    this.currentChat.messages.push({
+                        id: this.messageId++,
+                        role,
+                        content
+                    });
+                    this.$nextTick(() => {
+                        this.$refs.chatContainer.scrollTop = this.$refs.chatContainer.scrollHeight;
+                    });
+                },
+
+                async sendMessage() {
+                    if (!this.userInput.trim()) return;
+
+                    const userMessage = this.userInput;
+                    this.addMessage('user', userMessage);
+                    this.userInput = '';
+                    this.isLoading = true;
+
+                    try {
+                        if (userMessage.match(/^0x[a-fA-F0-9]{40}$/)) {
+                            await this.getWalletInfo(userMessage);
+                        } else {
+                            await this.processNaturalLanguage(userMessage);
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        this.addMessage('assistant', '❌ Error processing investigation request. Please verify input and try again.');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async getWalletInfo(address) {
+                    try {
+                        this.addMessage('assistant', '🔍 Initiating blockchain investigation...');
+
+                        // Get balance from Etherscan
+                        const balanceResponse = await fetch(`https://api.etherscan.io/api?module=account&action=balance&address=${address}&tag=latest&apikey=ZD6QAREDC6WUHVT339T7KAGGM8698RSKPC`);
+                        const balanceData = await balanceResponse.json();
+                        const ethBalance = (parseInt(balanceData.result) / 1e18).toFixed(4);
+                        this.currentChat.walletData.balance = ethBalance;
+
+                        // Get transactions from Etherscan
+                        const txResponse = await fetch(`https://api.etherscan.io/api?module=account&action=txlist&address=${address}&page=1&offset=5&sort=desc&apikey=ZD6QAREDC6WUHVT339T7KAGGM8698RSKPC`);
+                        const txData = await txResponse.json();
+                        
+                        this.currentChat.walletData.transactions = txData.result?.map(tx => ({
+                            hash: tx.hash,
+                            value: (parseInt(tx.value) / 1e18).toFixed(4)
+                        })) || [];
+
+                        const report = `📋 Investigation Report for ${address}\n\n` +
+                                     `💰 Current Balance: ${ethBalance} ETH\n\n` +
+                                     `📊 Transaction Analysis:\n` +
+                                     `• Recent Transactions: ${txData.result?.length || 0} found\n` +
+                                     `• Activity Status: ${ethBalance > 0 ? '🟢 Active' : '🔴 Inactive'}\n\n` +
+                                     `🔍 Risk Assessment:\n` +
+                                     `• Wallet Type: EOA (Externally Owned Account)\n` +
+                                     `• Security Level: ${this.calculateRiskLevel(txData.result)}\n\n` +
+                                     `Check the Analytics Panel for detailed transaction data.\n` +
+                                     `Would you like to analyze specific transactions or perform another query?`;
+
+                        this.addMessage('assistant', report);
+                    } catch (error) {
+                        console.error('Blockchain API Error:', error);
+                        this.addMessage('assistant', '❌ Error accessing blockchain data. Please verify the address and try again.');
+                    }
+                },
+
+                calculateRiskLevel(transactions) {
+                    if (!transactions || transactions.length === 0) return '⚪ Unknown';
+                    const totalValue = transactions.reduce((sum, tx) => sum + parseFloat(tx.value), 0);
+                    if (totalValue > 100) return '🔴 High Activity';
+                    if (totalValue > 10) return '🟡 Medium Activity';
+                    return '🟢 Low Activity';
+                },
+
+                async processNaturalLanguage(question) {
+                    try {
+                        const addressMatch = question.match(/0x[a-fA-F0-9]{40}/);
+                        if (addressMatch) {
+                            await this.getWalletInfo(addressMatch[0]);
+                        } else {
+                            this.addMessage('assistant', 'I need a valid Ethereum address to investigate. Please provide one or rephrase your question with a specific wallet address.');
+                        }
+                    } catch (error) {
+                        console.error('Processing Error:', error);
+                        this.addMessage('assistant', '❌ Error processing your request. Please try asking in a different way.');
+                    }
+                }
+            }));
+        });
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
